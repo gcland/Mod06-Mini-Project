@@ -1,8 +1,9 @@
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-from marshmallow import fields
+from marshmallow import fields, validate
 from marshmallow import ValidationError
+from sqlalchemy import select
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:Pandora965@localhost/e_commerce_db'
@@ -40,24 +41,6 @@ class Customer(db.Model):
 
 # }
 
-#Order Class and Schemas#
-
-class OrderSchema(ma.Schema):
-    date = fields.String(required=True)
-    customer_id = fields.String(required=True)
-
-    class Meta:
-        fields = ('date', 'customer_id', 'id')
-
-order_schema = OrderSchema()
-orders_schema = OrderSchema(many=True)
-
-class Order(db.Model):
-    __tablename__ = 'Orders'
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, nullable=False)
-    customer_id = db.Column(db.Integer, db.ForeignKey('Customers.id'))
-
 #CustomerAccount Class and Schemas#
 
 class CustomerAccountSchema(ma.Schema):
@@ -91,32 +74,73 @@ class CustomerAccount(db.Model):
 
 #}
 
+#Order Class and Schemas#
+
+
 #Many to Many
 
 #association table
 order_product = db.Table('Order_Product',
-        db.Column('order_id', db.Integer, db.ForeignKey('Orders.id'), primary_key = True),
-        db.Column('product_id', db.Integer, db.ForeignKey('Products.id'), primary_key=True)
+    db.Column('order_id', db.Integer, db.ForeignKey('Orders.id'), primary_key = True),
+    db.Column('product_id', db.Integer, db.ForeignKey('Products.id'), primary_key = True)
 )
-
-#Product Class and Schemas#
-
-class ProductSchema(ma.Schema):
-    name = fields.String(required=True)
-    price = fields.String(required=True)
+class Order_ProductSchema(ma.Schema):
+    order_id = fields.String(required=True)
+    product_id = fields.String(required=True)
 
     class Meta:
-        fields = ('id','name', 'price')
+        fields = ('order_id', 'product_id')
+order_product_schema = Order_ProductSchema()
+orders_products_schema = Order_ProductSchema(many=True)
+#Order Class and Schemas#
 
-product_schema = ProductSchema()
-products_schema = ProductSchema(many=True)
+class OrderSchema(ma.Schema):
+    order_date = fields.String(required=True)
+    delivery_date = fields.String(required=True)
+    customer_id = fields.String(required=True)
+
+    class Meta:
+        fields = ('id', 'order_date', 'delivery_date', 'customer_id', 'products')
+
+order_schema = OrderSchema()
+orders_schema = OrderSchema(many=True)
+
+class Order(db.Model):
+    __tablename__ = 'Orders'
+    id = db.Column(db.Integer, primary_key=True)
+    order_date = db.Column(db.Date, nullable=False)
+    delivery_date = db.Column(db.Date, nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('Customers.id'))
+    products = db.relationship('Product', secondary=order_product, backref=db.backref('orders', lazy='dynamic'))
+
+#Example format in Postman (add/update)
+#{
+
+    #"order_date": "YYYY/MM/DD",
+    #"delivery_date": "YYYY/MM/DD",
+    #"customer_id": "1"
+    #"product_id": "1"
+
+#}
+
+#Product Class and Schemas#
 
 class Product(db.Model):
     __tablename__ = 'Products'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     price = db.Column(db.Float, nullable=False)
-    orders = db.relationship('Order', secondary=order_product, backref=db.backref('products'))
+    # orders = db.relationship('Order', secondary=order_product, backref=db.backref('products'))
+
+class ProductSchema(ma.Schema):
+    name = fields.String(required=True, validate=validate.Length(min=1))
+    price = fields.Float(required=True, validate=validate.Range(min=0))
+
+    class Meta:
+        fields = ('id','name', 'price')
+
+product_schema = ProductSchema()
+products_schema = ProductSchema(many=True)
 
 #Example format in Postman (add/update)
 # {
@@ -213,6 +237,16 @@ def get_product():
     products = Product.query.all()
     return products_schema.jsonify(products)
 
+@app.route('/products/by-id', methods=['GET']) #/by-id?id=1    (example)
+def view_by_product_id():
+    id = request.args.get('id')
+    product = Product.query.filter(Product.id == id).first()
+    if product:
+        return product_schema.jsonify(product)
+    else:
+        return jsonify({"message": "Product not found"}), 404
+
+
 @app.route('/products', methods=['POST'])
 def add_product():
     try:
@@ -244,6 +278,34 @@ def delete_product(id):
     db.session.delete(product)
     db.session.commit()
     return jsonify({'message':'Product removed successfully'}), 200
+
+#Order Functions#
+
+@app.route('/orders', methods=['GET'])
+def get_orders():
+    query = select(Order)
+    result = db.session.execute(query).scalars()
+    products = result.all()
+    return orders_schema.jsonify(products)
+
+@app.route('/orders', methods=['POST']) 
+def add_order():
+        try:
+            json_order = request.json
+            products = json_order.pop('products', [])
+            if not products:
+                return jsonify({'Error': 'cannot place order without products.'}), 400
+            order_data = order_schema.load(json_order)
+        except ValidationError as err:
+            return jsonify(err.messages), 400
+
+        new_order = Order(order_date=order_data['order_date'], delivery_date=order_data['delivery_date'], customer_id=order_data['customer_id'])
+        for product in products:
+            item = Product.query.filter_by(id = product).first()
+            new_order.products.append(item)
+        db.session.add(new_order)
+        db.session.commit()
+        return jsonify({'message': 'New order placed successfully'}), 201
 
 with app.app_context():
     db.create_all()
