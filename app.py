@@ -4,9 +4,10 @@ from flask_marshmallow import Marshmallow
 from marshmallow import fields, validate
 from marshmallow import ValidationError
 from sqlalchemy import select
+from password import password
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:Pandora965@localhost/e_commerce_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://root:{password}@localhost/e_commerce_db' 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
@@ -74,6 +75,27 @@ class CustomerAccount(db.Model):
 
 #}
 
+#Product Class and Schemas#
+
+class Product(db.Model):
+    __tablename__ = 'Products'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    # orders = db.relationship('Order', secondary=order_product, backref=db.backref('products'))
+
+class ProductSchema(ma.Schema):
+    id = fields.Integer(required=False)
+    name = fields.String(required=True, validate=validate.Length(min=1))
+    price = fields.Float(required=True, validate=validate.Range(min=0))
+
+    class Meta:
+        fields = ('id','name', 'price')
+
+product_schema = ProductSchema()
+products_schema = ProductSchema(many=True)
+
+
 #Order Class and Schemas#
 
 
@@ -84,26 +106,8 @@ order_product = db.Table('Order_Product',
     db.Column('order_id', db.Integer, db.ForeignKey('Orders.id'), primary_key = True),
     db.Column('product_id', db.Integer, db.ForeignKey('Products.id'), primary_key = True)
 )
-class Order_ProductSchema(ma.Schema):
-    order_id = fields.String(required=True)
-    product_id = fields.String(required=True)
 
-    class Meta:
-        fields = ('order_id', 'product_id')
-order_product_schema = Order_ProductSchema()
-orders_products_schema = Order_ProductSchema(many=True)
 #Order Class and Schemas#
-
-class OrderSchema(ma.Schema):
-    order_date = fields.String(required=True)
-    delivery_date = fields.String(required=True)
-    customer_id = fields.String(required=True)
-
-    class Meta:
-        fields = ('id', 'order_date', 'delivery_date', 'customer_id', 'products')
-
-order_schema = OrderSchema()
-orders_schema = OrderSchema(many=True)
 
 class Order(db.Model):
     __tablename__ = 'Orders'
@@ -123,24 +127,18 @@ class Order(db.Model):
 
 #}
 
-#Product Class and Schemas#
-
-class Product(db.Model):
-    __tablename__ = 'Products'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    price = db.Column(db.Float, nullable=False)
-    # orders = db.relationship('Order', secondary=order_product, backref=db.backref('products'))
-
-class ProductSchema(ma.Schema):
-    name = fields.String(required=True, validate=validate.Length(min=1))
-    price = fields.Float(required=True, validate=validate.Range(min=0))
+class OrderSchema(ma.Schema):
+    id = fields.Integer(required=False)
+    order_date = fields.String(required=True)
+    delivery_date = fields.String(required=True)
+    customer_id = fields.String(required=True)
+    products = fields.List(fields.Nested(ProductSchema))
 
     class Meta:
-        fields = ('id','name', 'price')
+        fields = ('id', 'order_date', 'delivery_date', 'customer_id', 'products')
 
-product_schema = ProductSchema()
-products_schema = ProductSchema(many=True)
+order_schema = OrderSchema()
+orders_schema = OrderSchema(many=True)
 
 #Example format in Postman (add/update)
 # {
@@ -285,8 +283,8 @@ def delete_product(id):
 def get_orders():
     query = select(Order)
     result = db.session.execute(query).scalars()
-    products = result.all()
-    return orders_schema.jsonify(products)
+    products = result.all() ##orders?##
+    return orders_schema.jsonify(products) ##orders?##
 
 @app.route('/orders', methods=['POST']) 
 def add_order():
