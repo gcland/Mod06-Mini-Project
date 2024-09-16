@@ -95,10 +95,6 @@ class ProductSchema(ma.Schema):
 product_schema = ProductSchema()
 products_schema = ProductSchema(many=True)
 
-
-#Order Class and Schemas#
-
-
 #Many to Many
 
 #association table
@@ -283,27 +279,57 @@ def delete_product(id):
 def get_orders():
     query = select(Order)
     result = db.session.execute(query).scalars()
-    products = result.all() ##orders?##
-    return orders_schema.jsonify(products) ##orders?##
+    products = result.all() 
+    return orders_schema.jsonify(products) 
 
 @app.route('/orders', methods=['POST']) 
 def add_order():
-        try:
-            json_order = request.json
-            products = json_order.pop('products', [])
-            if not products:
-                return jsonify({'Error': 'cannot place order without products.'}), 400
-            order_data = order_schema.load(json_order)
-        except ValidationError as err:
-            return jsonify(err.messages), 400
+    try:
+        json_order = request.json
+        products = json_order.pop('products', [])
+        if not products:
+            return jsonify({'Error': 'cannot place order without products.'}), 400
+        order_data = order_schema.load(json_order)
+    except ValidationError as err:
+        return jsonify(err.messages), 400
 
-        new_order = Order(order_date=order_data['order_date'], delivery_date=order_data['delivery_date'], customer_id=order_data['customer_id'])
-        for product in products:
-            item = Product.query.filter_by(id = product).first()
-            new_order.products.append(item)
-        db.session.add(new_order)
-        db.session.commit()
-        return jsonify({'message': 'New order placed successfully'}), 201
+    new_order = Order(order_date=order_data['order_date'], delivery_date=order_data['delivery_date'], customer_id=order_data['customer_id'])
+    for product in products:
+        item = Product.query.filter_by(id = product).first()
+        new_order.products.append(item)
+    db.session.add(new_order)
+    db.session.commit()
+    return jsonify({'message': 'New order placed successfully'}), 201    
+
+@app.route('/orders/<int:order_id>', methods=['PUT']) 
+def update_order(order_id):
+    order = Order.query.get_or_404(order_id)
+    try:
+        json_order = request.json
+        products = json_order.pop('products', [])
+        if not products:
+            return jsonify({'Error': 'cannot update order without products.'}), 400
+        order_data = order_schema.load(request.json)
+    except ValidationError as err:
+        return jsonify(err.messages), 400
+    
+    order.order_date = order_data['order_date']
+    order.delivery_date = order_data['delivery_date']
+    order.customer_id = order_data['customer_id']
+    order.products.clear()
+    for product in products:
+        item = Product.query.filter_by(id = product).first()
+        order.products.append(item)
+
+    db.session.commit()
+    return jsonify({'message':'Order details updated successfully'}), 200
+
+@app.route('/orders/<int:order_id>', methods=['DELETE'])
+def delete_order(order_id):
+    order = Order.query.get_or_404(order_id)
+    db.session.delete(order)
+    db.session.commit()
+    return jsonify({'message':'Order removed successfully'}), 200
 
 with app.app_context():
     db.create_all()
