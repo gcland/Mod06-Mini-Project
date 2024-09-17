@@ -55,7 +55,7 @@ class CustomerAccountSchema(ma.Schema):
 customeraccount_schema = CustomerAccountSchema()
 customeraccounts_schema = CustomerAccountSchema(many=True)
 
-#One to One
+#One to One relationship
 
 class CustomerAccount(db.Model):
     __tablename__ = 'Customer_Accounts'
@@ -71,7 +71,7 @@ class CustomerAccount(db.Model):
 
     #"username": "XXXXXX",
     #"password": "YYYYYY",
-    #"customer_id": "1"
+    #"customer_id": "#"
 
 #}
 
@@ -84,6 +84,14 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     # orders = db.relationship('Order', secondary=order_product, backref=db.backref('products'))
 
+#Example format in Postman (add/update)
+# {
+
+#     "name":"XXXXXX",
+#     "price":"####"
+
+# }
+
 class ProductSchema(ma.Schema):
     id = fields.Integer(required=False)
     name = fields.String(required=True, validate=validate.Length(min=1))
@@ -95,9 +103,7 @@ class ProductSchema(ma.Schema):
 product_schema = ProductSchema()
 products_schema = ProductSchema(many=True)
 
-#Many to Many
-
-#association table
+#Many to Many relationship - association table
 order_product = db.Table('Order_Product',
     db.Column('order_id', db.Integer, db.ForeignKey('Orders.id'), primary_key = True),
     db.Column('product_id', db.Integer, db.ForeignKey('Products.id'), primary_key = True)
@@ -118,8 +124,8 @@ class Order(db.Model):
 
     #"order_date": "YYYY/MM/DD",
     #"delivery_date": "YYYY/MM/DD",
-    #"customer_id": "1"
-    #"product_id": "1"
+    #"customer_id": "#"
+    #"product_id": [#, #]  Note: cannot have duplicate entries of product id's. quanity / duplicate product id's to come later
 
 #}
 
@@ -135,14 +141,6 @@ class OrderSchema(ma.Schema):
 
 order_schema = OrderSchema()
 orders_schema = OrderSchema(many=True)
-
-#Example format in Postman (add/update)
-# {
-
-#     "name":"XXXXXX",
-#     "price":"YYYYYYY",
-
-# }
 
 #Customer Functions#
 
