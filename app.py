@@ -75,14 +75,15 @@ class CustomerAccount(db.Model):
 
 #}
 
-#Product Class and Schemas#
+#Many to Many
 
-class Product(db.Model):
-    __tablename__ = 'Products'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    price = db.Column(db.Float, nullable=False)
-    # orders = db.relationship('Order', secondary=order_product, backref=db.backref('products'))
+#association table
+order_product = db.Table('Order_Product',
+    db.Column('order_id', db.Integer, db.ForeignKey('Orders.id'), primary_key = True),
+    db.Column('product_id', db.Integer, db.ForeignKey('Products.id'), primary_key = True)
+)
+
+#Product Class and Schemas#
 
 class ProductSchema(ma.Schema):
     id = fields.Integer(required=False)
@@ -95,13 +96,31 @@ class ProductSchema(ma.Schema):
 product_schema = ProductSchema()
 products_schema = ProductSchema(many=True)
 
-#Many to Many
+class Product(db.Model):
+    __tablename__ = 'Products'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    #orders = db.relationship('Order', secondary=order_product, backref=db.backref('products', lazy='dynamic'))
 
-#association table
-order_product = db.Table('Order_Product',
-    db.Column('order_id', db.Integer, db.ForeignKey('Orders.id'), primary_key = True),
-    db.Column('product_id', db.Integer, db.ForeignKey('Products.id'), primary_key = True)
-)
+class OrderProduct(db.Model):
+    __tablename__ = 'order_product'
+    id = db.Column(db.Integer, primary_key=True)
+    quantity = db.Column(db.Integer, default = 1)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'))
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'))
+    order = db.relationship('Order', backpopulates='products')
+    products = db.relationship('Product', backpopulates='orders')
+
+#Example format in Postman (add/update)
+#{
+
+    #"order_date": "YYYY/MM/DD",
+    #"delivery_date": "YYYY/MM/DD",
+    #"customer_id": "1"
+    #"product_id": [1, 3]
+
+#}
 
 #Order Class and Schemas#
 
@@ -111,17 +130,7 @@ class Order(db.Model):
     order_date = db.Column(db.Date, nullable=False)
     delivery_date = db.Column(db.Date, nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey('Customers.id'))
-    products = db.relationship('Product', secondary=order_product, backref=db.backref('orders', lazy='dynamic'))
-
-#Example format in Postman (add/update)
-#{
-
-    #"order_date": "YYYY/MM/DD",
-    #"delivery_date": "YYYY/MM/DD",
-    #"customer_id": "1"
-    #"product_id": "1"
-
-#}
+    products = db.relationship('order_product', backpopulates='order')
 
 class OrderSchema(ma.Schema):
     id = fields.Integer(required=False)
