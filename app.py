@@ -5,11 +5,14 @@ from marshmallow import fields, validate
 from marshmallow import ValidationError
 from sqlalchemy import select
 from password import password
+from flask_cors import CORS
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+mysqlconnector://root:{password}@localhost/e_commerce_db' 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
+CORS(app)
 
 #Customer Class and Schemas#
 
@@ -17,9 +20,11 @@ class CustomerSchema(ma.Schema):
     name = fields.String(required=True)
     email = fields.String(required=True)
     phone = fields.String(required=True)
+    username = fields.String(required=True)
+    password = fields.String(required=True)
 
     class Meta:
-        fields = ('name', 'email', 'phone', 'id')
+        fields = ('name', 'email', 'phone', 'username', 'password', 'id')
 
 customer_schema = CustomerSchema()
 customers_schema = CustomerSchema(many=True)
@@ -30,6 +35,8 @@ class Customer(db.Model):
     name = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(320))
     phone = db.Column(db.String(15))
+    username = db.Column(db.String(255))
+    password = db.Column(db.String(255))
     orders = db.relationship('Order', backref='customer')
 
 #Example format in Postman (add/update)
@@ -39,6 +46,8 @@ class Customer(db.Model):
 #     "name":"XXXXXX",
 #     "email":"YYYYYYY",
 #     "phone":"#######"
+#     "username":"AAAAAA",
+#     "password":"BBBBBBB",
 
 # }
 
@@ -149,6 +158,16 @@ def get_customers():
     customers = Customer.query.all()
     return customers_schema.jsonify(customers)
 
+@app.route('/customers/by-id', methods=['GET']) #/by-id?id=1    (example)
+def view_by_customer_id():
+    id = request.args.get('id')
+    customer = Customer.query.filter(Customer.id == id).first()
+    if customer:
+        return customer_schema.jsonify(customer)
+    else:
+        return jsonify({"message": "Customer not found"}), 404
+
+
 @app.route('/customers', methods=['POST'])
 def add_customer():
     try:
@@ -156,7 +175,7 @@ def add_customer():
     except ValidationError as err:
         return jsonify(err.messages), 400
 
-    new_customer = Customer(name=customer_data['name'], email=customer_data['email'], phone=customer_data['phone'])
+    new_customer = Customer(name=customer_data['name'], email=customer_data['email'], phone=customer_data['phone'], username=customer_data['username'], password=customer_data['password'])
     db.session.add(new_customer)
     db.session.commit()
     return jsonify({'message': 'New customer added successfully'}), 201
@@ -172,6 +191,8 @@ def update_customer(id):
     customer.name = customer_data['name']
     customer.email = customer_data['email']
     customer.phone = customer_data['phone']
+    customer.username = customer_data['username']
+    customer.password = customer_data['password']
     db.session.commit()
     return jsonify({'message':'Customer details updated successfully'}), 200
 
@@ -188,6 +209,15 @@ def delete_customer(id):
 def get_customeraccounts():
     customeraccounts = CustomerAccount.query.all()
     return customeraccounts_schema.jsonify(customeraccounts)
+
+@app.route('/customeraccounts/by-id', methods=['GET']) #/by-id?id=1    (example)
+def view_by_customeraccounts_id():
+    id = request.args.get('id')
+    customeraccount = CustomerAccount.query.filter(CustomerAccount.id == id).first()
+    if customeraccount:
+        return customeraccount_schema.jsonify(customeraccount)
+    else:
+        return jsonify({"message": "Customer Account not found"}), 404
 
 @app.route('/customeraccounts', methods=['POST'])
 def add_customeraccount():
@@ -295,6 +325,7 @@ def add_order():
     for product in products:
         item = Product.query.filter_by(id = product).first()
         new_order.products.append(item)
+    
     db.session.add(new_order)
     db.session.commit()
     return jsonify({'message': 'New order placed successfully'}), 201    
@@ -328,6 +359,15 @@ def delete_order(order_id):
     db.session.delete(order)
     db.session.commit()
     return jsonify({'message':'Order removed successfully'}), 200
+
+@app.route('/orders/by-id', methods=['GET']) #/by-id?id=1    (example)
+def view_by_order_id():
+    id = request.args.get('id')
+    order = Order.query.filter(Order.id == id).first()
+    if order:
+        return order_schema.jsonify(order)
+    else:
+        return jsonify({"message": "Order not found"}), 404
 
 with app.app_context():
     db.create_all()

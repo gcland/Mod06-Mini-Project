@@ -1,3 +1,3 @@
 # XXXXXX = user password
 
-password = 'XXXXXX'
+password = 'XXXXXXX'
